@@ -134,7 +134,7 @@ router.post('/file_upload', function(req, res) {
 // Get posts
 router.get('/allpost', async (req, res) => {
     try {
-        const pageLimit = 10;
+        const pageLimit = 20;
         const pageNo = req.query.pageNo?req.query.pageNo:1;
         const userId = req.query.userId?req.query.userId:null;
         const search = req.query.search;
