@@ -7,7 +7,7 @@ const User = require('../models/user');
 router.get('/:postid', async (req, res) => {
     const { postid } = req.params;
     try {
-        const comments = await Comment.findAll({ where: { postid: postid }, include: [{model: User, as: 'user'}] });
+        const comments = await Comment.findAll({ where: { postid: postid }, include: [{model: User, as: 'user'}], order: [['createdAt', 'DESC']] });
         res.status(200).send({ message: '', comments })
     }
     catch (err) {

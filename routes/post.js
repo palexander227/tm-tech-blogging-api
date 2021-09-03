@@ -6,7 +6,7 @@ const User = require('../models/user');
 const path = require('path');
 const passport = require('passport')
 const Sequelize = require('sequelize');
-require('../config/passport')(passport)
+require('../config/passport')(passport);
 
 // Add Post
 router.post('/', passport.authenticate('jwt', { session: false }), async (req, res) => {
@@ -30,12 +30,17 @@ router.post('/', passport.authenticate('jwt', { session: false }), async (req, r
             }, async (err, uploadedImg) => {
                 if (err) return res.status(400).send({ err });
                 fileName = `https://thoughtmuseum-image-hosting.s3.us-east-2.amazonaws.com/${uploadedImg[0].fd}`;
-                const post = await Post.create({
+                let post = await Post.create({
                     title: req.body.title,
                     content: req.body.content,
                     userId: req.user.id,
                     image:fileName
                 });
+                const user = await User.findByPk(req.user.id, { attributes: ['firstName','lastName'], raw: true });
+                post = JSON.stringify(post);
+                post = JSON.parse(post);
+                post.user = user;
+                console.log(post)
                 res.status(201).send({ message: 'Post created', post });
                 //res.status(200).send({message: 'uploaded successfully...', data: {url: uploadedImg[0].fd}});
             })
@@ -46,6 +51,8 @@ router.post('/', passport.authenticate('jwt', { session: false }), async (req, r
                 userId: req.user.id,
                 image:fileName
             });
+            const user = await User.findByPk(req.user.id, { attributes: ['firstName','lastName'] });
+            post.user = user;
             res.status(201).send({ message: 'Post created', post });
         }
 
@@ -76,10 +83,33 @@ router.put('/:postid', passport.authenticate('jwt', { session: false }), async (
         if (post) {
             post.title = req.body.title
             post.content = req.body.content
-            await post.save();
-            res.status(200).send({ message: 'Post updated successfully', post });
-        }
-        else {
+            let files = undefined;
+            if (req._fileparser) {
+                files = req._fileparser.upstreams.length
+                    ? req.file("postImage")
+                    : undefined;
+            }
+            let fileName = '';
+            if(files){
+                files.upload({
+                    adapter: require('skipper-s3'),
+                    key: process.env.BUCKET_KEY,
+                    secret: process.env.BUCKET_SECRET,
+                    bucket: process.env.BUCKET_NAME,
+                    maxBytes: 10000000, 
+                    dirname: '',
+                }, async (err, uploadedImg) => {
+                    if (err) return res.status(400).send({ err });
+                    fileName = `https://thoughtmuseum-image-hosting.s3.us-east-2.amazonaws.com/${uploadedImg[0].fd}`;
+                    post.image = fileName;
+                    await post.save();
+                    res.status(200).send({ message: 'Post updated successfully', post });
+                })
+            } else{
+                await post.save();
+                res.status(200).send({ message: 'Post updated successfully', post });
+            }
+        } else {
             res.status(200).send({ message: 'Post not found' });
         }
     }
@@ -148,6 +178,9 @@ router.get('/allpost', async (req, res) => {
                     as: "user",
                     attributes: ['firstName', 'lastName']
                 }
+            ],
+            order: [
+                ['createdAt', 'DESC']
             ]
         };
         if (userId && userId !== 'null') {
@@ -162,7 +195,6 @@ router.get('/allpost', async (req, res) => {
             condition = condition ? {...condition, ...searchQuery} : searchQuery
             
         }
-        console.log(condition)
         if (condition) {
             query.where = condition;
         }
